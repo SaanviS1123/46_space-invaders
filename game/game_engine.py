@@ -1,5 +1,6 @@
 import pygame
 import random
+
 from .player import Player
 from .enemy import EnemyGrid
 from .bullet import Bullet
@@ -10,7 +11,9 @@ WHITE = (255, 255, 255)
 GREEN = (0, 200, 0)
 RED = (220, 60, 60)
 
+
 class GameEngine:
+
     def __init__(self, width, height):
         self.width = width
         self.height = height
@@ -20,6 +23,7 @@ class GameEngine:
 
         self.player_bullets = []
         self.enemy_bullets = []
+
         self._shoot_cooldown = 0
         self.enemy_fire_chance = 0.01
 
@@ -31,13 +35,17 @@ class GameEngine:
         if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
             if self._shoot_cooldown <= 0:
                 bullet_x = self.player.center_x() - 2
-                self.player_bullets.append(Bullet(bullet_x, self.player.y, direction=-1))
+                self.player_bullets.append(
+                    Bullet(bullet_x, self.player.y, direction=-1)
+                )
                 self._shoot_cooldown = 15
 
     def handle_input(self):
         keys = pygame.key.get_pressed()
+
         if keys[pygame.K_LEFT] or keys[pygame.K_a]:
             self.player.move(-self.player.speed, self.width)
+
         if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self.player.move(self.player.speed, self.width)
 
@@ -53,22 +61,34 @@ class GameEngine:
         for enemy in self.enemy_grid.alive_enemies():
             if random.random() < self.enemy_fire_chance:
                 bullet_x = enemy.x + enemy.width // 2
-                self.enemy_bullets.append(Bullet(bullet_x, enemy.y + enemy.height, direction=1))
+                self.enemy_bullets.append(
+                    Bullet(
+                        bullet_x,
+                        enemy.y + enemy.height,
+                        direction=1
+                    )
+                )
 
         for bullet in self.player_bullets:
             bullet.move()
+
         for bullet in self.enemy_bullets:
             bullet.move()
 
-        self.player_bullets = [b for b in self.player_bullets if not b.off_screen(self.height)]
-        self.enemy_bullets = [b for b in self.enemy_bullets if not b.off_screen(self.height)]
+        self.player_bullets = [
+            b for b in self.player_bullets
+            if not b.off_screen(self.height)
+        ]
 
-        # NOTE: this removes a bullet from player_bullets while iterating
-        # directly over that same list. Python skips the element right
-        # after a removed one, so when two enemies are hit on the same
-        # frame the second collision can be missed - the bullet appears
-        # to pass straight through. See Task 1 in the README.
-        for bullet in self.player_bullets:
+        self.enemy_bullets = [
+            b for b in self.enemy_bullets
+            if not b.off_screen(self.height)
+        ]
+
+        # Task 1: Improved collision handling.
+        # Iterate over a copy so bullets can safely be removed
+        # from the original list during collision processing.
+        for bullet in self.player_bullets[:]:
             for enemy in self.enemy_grid.alive_enemies():
                 if bullet.rect().colliderect(enemy.rect()):
                     enemy.alive = False
@@ -92,13 +112,21 @@ class GameEngine:
 
         for bullet in self.player_bullets:
             pygame.draw.rect(screen, WHITE, bullet.rect())
+
         for bullet in self.enemy_bullets:
             pygame.draw.rect(screen, RED, bullet.rect())
 
-        score_text = self.font.render(f"Score: {self.score}", True, WHITE)
+        score_text = self.font.render(
+            f"Score: {self.score}",
+            True,
+            WHITE
+        )
+
         screen.blit(score_text, (10, 10))
 
-        if self.game_over and not getattr(self, "_game_over_logged", False):
-            # NOTE: no proper game-over screen yet - see Task 2 in the README.
+        if self.game_over and not getattr(
+            self, "_game_over_logged", False
+        ):
+            # Task 2 will replace this with a proper game-over screen.
             print("Game over! Final score:", self.score)
             self._game_over_logged = True
