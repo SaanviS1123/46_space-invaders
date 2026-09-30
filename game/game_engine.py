@@ -5,6 +5,7 @@ from .player import Player
 from .enemy import EnemyGrid
 from .bullet import Bullet
 
+
 # Game Engine
 
 WHITE = (255, 255, 255)
@@ -32,13 +33,29 @@ class GameEngine:
         self.game_over = False
 
     def handle_event(self, event):
+        # Handle input while the Game Over screen is displayed.
+        if self.game_over:
+            if event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
+                    return False
+            return True
+
+        # Normal gameplay: Space shoots.
         if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
             if self._shoot_cooldown <= 0:
                 bullet_x = self.player.center_x() - 2
+
                 self.player_bullets.append(
-                    Bullet(bullet_x, self.player.y, direction=-1)
+                    Bullet(
+                        bullet_x,
+                        self.player.y,
+                        direction=-1
+                    )
                 )
+
                 self._shoot_cooldown = 15
+
+        return True
 
     def handle_input(self):
         keys = pygame.key.get_pressed()
@@ -61,6 +78,7 @@ class GameEngine:
         for enemy in self.enemy_grid.alive_enemies():
             if random.random() < self.enemy_fire_chance:
                 bullet_x = enemy.x + enemy.width // 2
+
                 self.enemy_bullets.append(
                     Bullet(
                         bullet_x,
@@ -96,25 +114,49 @@ class GameEngine:
                     self.score += 1
                     break
 
+        # Check enemy bullets hitting the player.
         for bullet in self.enemy_bullets:
             if bullet.rect().colliderect(self.player.rect()):
                 self.game_over = True
                 break
 
+        # Check whether enemies have reached the player area.
         if self.enemy_grid.reached_bottom(self.player.y):
             self.game_over = True
 
     def render(self, screen):
-        pygame.draw.rect(screen, GREEN, self.player.rect())
+        # Task 2: Display Game Over screen instead of normal game.
+        if self.game_over:
+            self._render_game_over(screen)
+            return
+
+        # Normal game rendering.
+        pygame.draw.rect(
+            screen,
+            GREEN,
+            self.player.rect()
+        )
 
         for enemy in self.enemy_grid.alive_enemies():
-            pygame.draw.rect(screen, WHITE, enemy.rect())
+            pygame.draw.rect(
+                screen,
+                WHITE,
+                enemy.rect()
+            )
 
         for bullet in self.player_bullets:
-            pygame.draw.rect(screen, WHITE, bullet.rect())
+            pygame.draw.rect(
+                screen,
+                WHITE,
+                bullet.rect()
+            )
 
         for bullet in self.enemy_bullets:
-            pygame.draw.rect(screen, RED, bullet.rect())
+            pygame.draw.rect(
+                screen,
+                RED,
+                bullet.rect()
+            )
 
         score_text = self.font.render(
             f"Score: {self.score}",
@@ -124,9 +166,52 @@ class GameEngine:
 
         screen.blit(score_text, (10, 10))
 
-        if self.game_over and not getattr(
-            self, "_game_over_logged", False
-        ):
-            # Task 2 will replace this with a proper game-over screen.
-            print("Game over! Final score:", self.score)
-            self._game_over_logged = True
+    def _render_game_over(self, screen):
+        screen.fill((0, 0, 0))
+
+        title_font = pygame.font.Font(None, 72)
+        score_font = pygame.font.Font(None, 48)
+        instruction_font = pygame.font.Font(None, 32)
+
+        title = title_font.render(
+            "GAME OVER",
+            True,
+            WHITE
+        )
+
+        score = score_font.render(
+            f"Final Score: {self.score}",
+            True,
+            WHITE
+        )
+
+        instruction = instruction_font.render(
+            "Press Enter or Escape to exit",
+            True,
+            (180, 180, 180)
+        )
+
+        title_rect = title.get_rect(
+            center=(
+                screen.get_width() // 2,
+                screen.get_height() // 2 - 70
+            )
+        )
+
+        score_rect = score.get_rect(
+            center=(
+                screen.get_width() // 2,
+                screen.get_height() // 2
+            )
+        )
+
+        instruction_rect = instruction.get_rect(
+            center=(
+                screen.get_width() // 2,
+                screen.get_height() // 2 + 60
+            )
+        )
+
+        screen.blit(title, title_rect)
+        screen.blit(score, score_rect)
+        screen.blit(instruction, instruction_rect)
