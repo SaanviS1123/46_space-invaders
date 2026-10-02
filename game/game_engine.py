@@ -1,5 +1,9 @@
 import pygame
 import random
+import io
+import wave
+import math
+import struct
 
 from .player import Player
 from .enemy import EnemyGrid
@@ -34,6 +38,108 @@ class GameEngine:
         self.font = pygame.font.SysFont("Arial", 30)
         self.game_over = False
 
+        # Initialize the mixer and create the sound effects once.
+        self._initialize_sounds()
+
+    def _initialize_sounds(self):
+        self.fire_sound = None
+        self.enemy_destroyed_sound = None
+        self.game_over_sound = None
+
+        try:
+            # Only initialize the mixer if it has not already been initialized.
+            if pygame.mixer.get_init() is None:
+                pygame.mixer.init(
+                    frequency=44100,
+                    size=-16,
+                    channels=1,
+                    buffer=512
+                )
+
+            self.fire_sound = self._create_sound(
+                start_frequency=700,
+                end_frequency=450,
+                duration=0.07,
+                volume=0.25
+            )
+
+            self.enemy_destroyed_sound = self._create_sound(
+                start_frequency=250,
+                end_frequency=120,
+                duration=0.10,
+                volume=0.30
+            )
+
+            self.game_over_sound = self._create_sound(
+                start_frequency=500,
+                end_frequency=80,
+                duration=0.50,
+                volume=0.35
+            )
+
+        except pygame.error:
+            # If audio is unavailable, continue playing without sound.
+            self.fire_sound = None
+            self.enemy_destroyed_sound = None
+            self.game_over_sound = None
+
+    def _create_sound(
+        self,
+        start_frequency,
+        end_frequency,
+        duration,
+        volume
+    ):
+        sample_rate = 44100
+        sample_count = int(sample_rate * duration)
+
+        audio_data = bytearray()
+
+        for i in range(sample_count):
+            progress = i / sample_count
+
+            frequency = (
+                start_frequency
+                + (end_frequency - start_frequency) * progress
+            )
+
+            sample = math.sin(
+                2 * math.pi * frequency * i / sample_rate
+            )
+
+            # Fade the sound in and out to avoid clicks.
+            if progress < 0.05:
+                sample *= progress / 0.05
+            elif progress > 0.90:
+                sample *= (1.0 - progress) / 0.10
+
+            sample *= volume
+
+            value = int(sample * 32767)
+
+            audio_data.extend(
+                struct.pack("<h", value)
+            )
+
+        wav_data = io.BytesIO()
+
+        with wave.open(wav_data, "wb") as wav_file:
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(sample_rate)
+            wav_file.writeframes(audio_data)
+
+        wav_data.seek(0)
+
+        return pygame.mixer.Sound(file=wav_data)
+
+    def _play_sound(self, sound):
+        if sound is not None:
+            try:
+                sound.play()
+            except pygame.error:
+                pass
+
     def handle_event(self, event):
         # Handle input while the Game Over/replay screen is displayed.
         if self.game_over:
@@ -44,7 +150,7 @@ class GameEngine:
                     self._start_new_game("Medium")
                 elif event.key == pygame.K_3:
                     self._start_new_game("Hard")
-                elif event.key == pygame.K_ESCAPE:
+                elif event.key in (pygame.K_RETURN, pygame.K_ESCAPE):
                     return False
 
             return True
@@ -61,6 +167,9 @@ class GameEngine:
                         direction=-1
                     )
                 )
+
+                # Task 4: Play the player firing sound.
+                self._play_sound(self.fire_sound)
 
                 self._shoot_cooldown = 15
 
@@ -121,20 +230,32 @@ class GameEngine:
                     enemy.alive = False
                     self.player_bullets.remove(bullet)
                     self.score += 1
+
+                    # Task 4: Play the enemy-destroyed sound.
+                    self._play_sound(self.enemy_destroyed_sound)
+
                     break
 
         # Check enemy bullets hitting the player.
         for bullet in self.enemy_bullets:
             if bullet.rect().colliderect(self.player.rect()):
-                self.game_over = True
+                self._set_game_over()
                 break
 
         # Check whether enemies have reached the player area.
         if self.enemy_grid.reached_bottom(self.player.y):
+            self._set_game_over()
+
+    def _set_game_over(self):
+        # Only trigger the Game Over sound once.
+        if not self.game_over:
             self.game_over = True
 
+            # Task 4: Play the Game Over sound.
+            self._play_sound(self.game_over_sound)
+
     def render(self, screen):
-        # Task 3: Display Game Over/replay menu instead of normal game.
+        # Task 2/3: Display Game Over/replay menu instead of normal game.
         if self.game_over:
             self._render_game_over(screen)
             return
@@ -214,7 +335,7 @@ class GameEngine:
         )
 
         exit_text = option_font.render(
-            "Escape - Exit",
+            "Enter/Escape - Exit",
             True,
             WHITE
         )
